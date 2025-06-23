@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Bin Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    #map { height: 600px; width: 100%; }
+  </style>
+</head>
+<body>
+  <h2>Smart Bins Map</h2>
+  <div id="map"></div>
+
+  <script>
+    // 🔧 Replace with your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAwUD-JAejR1MxRKb9j1zBfeQqWBDRpn0o",
+      authDomain: "trashcan-fill.firebaseapp.com",
+      databaseURL: "https://trashcan-fill-default-rtdb.firebaseio.com/",
+      projectId: "trashcan-fill",
+      storageBucket: "trashcan-fill.firebasestorage.app",
+      messagingSenderId: "594167428",
+      appId: "1:594167457428:web:2f95b9ef62e4114d073681"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const map = L.map('map').setView([40.7128, -74.0060], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let markers = {};
+
+    db.ref('bins').on('value', snapshot => {
+      const bins = snapshot.val();
+      Object.values(markers).forEach(marker => map.removeLayer(marker));
+      markers = {};
+
+      for (const binID in bins) {
+        const bin = bins[binID];
+        const color = (bin.distance_cm <= 20) ? 'red' : 'green';
+
+        const marker = L.circleMarker([bin.latitude, bin.longitude], {
+          radius: 12,
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.6
+        }).addTo(map);
+
+        marker.bindPopup(`<b>${binID}</b><br>Fill Level: ${bin.distance_cm} cm`);
+        markers[binID] = marker;
+      }
+    });
+  </script>
+</body>
+</html>
