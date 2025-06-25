@@ -12,15 +12,59 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <style>
-    #map { height: 600px; width: 100%; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    #menu {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    #mapScreen {
+      display: none;
+    }
+
+    #map {
+      height: 600px;
+      width: 100%;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <h2>Smart Bins Map</h2>
-  <div id="map"></div>
+
+  <!-- Menu Screen -->
+  <div id="menu">
+    <h1>Welcome to Smart Bin System</h1>
+    <button onclick="showMap()">Map</button>
+  </div>
+
+  <!-- Map Screen -->
+  <div id="mapScreen">
+    <h2>Smart Bins Map</h2>
+    <div id="map"></div>
+  </div>
 
   <script>
-    // 🔧 Replace with your Firebase config
+    // Function to switch from menu to map
+    function showMap() {
+      document.getElementById('menu').style.display = 'none';
+      document.getElementById('mapScreen').style.display = 'block';
+      initializeMap(); // Call the map and Firebase logic
+    }
+
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAwUD-JAejR1MxRKb9j1zBfeQqWBDRpn0o",
       authDomain: "trashcan-fill.firebaseapp.com",
@@ -34,34 +78,36 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const map = L.map('map').setView([4.2105, 101.9758], 10);
+    let map, markers = {};
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    function initializeMap() {
+      map = L.map('map').setView([4.2105, 101.9758], 10);
 
-    let markers = {};
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
 
-    db.ref('bins').on('value', snapshot => {
-      const bins = snapshot.val();
-      Object.values(markers).forEach(marker => map.removeLayer(marker));
-      markers = {};
+      db.ref('bins').on('value', snapshot => {
+        const bins = snapshot.val();
+        Object.values(markers).forEach(marker => map.removeLayer(marker));
+        markers = {};
 
-      for (const binID in bins) {
-        const bin = bins[binID];
-        const color = (bin.distance_cm <= 20) ? 'red' : 'green';
+        for (const binID in bins) {
+          const bin = bins[binID];
+          const color = (bin.distance_cm <= 20) ? 'red' : 'green';
 
-        const marker = L.circleMarker([bin.latitude, bin.longitude], {
-          radius: 12,
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.6
-        }).addTo(map);
+          const marker = L.circleMarker([bin.latitude, bin.longitude], {
+            radius: 12,
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.6
+          }).addTo(map);
 
-        marker.bindPopup(`<b>${binID}</b><br>Fill Level: ${bin.distance_cm} cm`);
-        markers[binID] = marker;
-      }
-    });
+          marker.bindPopup(`<b>${binID}</b><br>Fill Level: ${bin.distance_cm} cm`);
+          markers[binID] = marker;
+        }
+      });
+    }
   </script>
 </body>
 </html>
