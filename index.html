@@ -34,7 +34,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const map = L.map('map').setView([4.2105, 101.9758], 1);
+    const map = L.map('map').setView([4.2105, 101.9758], 10);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
