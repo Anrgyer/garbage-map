@@ -4,10 +4,12 @@
   <title>Smart Bin Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
+  <!-- Leaflet CSS/JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -31,7 +33,7 @@
     }
 
     #map {
-      height: 600px;
+      height: calc(100vh - 60px);
       width: 100%;
     }
 
@@ -39,6 +41,11 @@
       padding: 10px 20px;
       font-size: 16px;
       cursor: pointer;
+    }
+
+    #legend {
+      padding: 10px;
+      background: #fff;
     }
   </style>
 </head>
@@ -53,17 +60,16 @@
   <!-- Map Screen -->
   <div id="mapScreen">
     <h2>Smart Bins Map</h2>
+    <div id="legend">
+      <span style="color: darkred;">●</span> Critical
+      <span style="color: orange; margin-left: 15px;">●</span> High
+      <span style="color: gold; margin-left: 15px;">●</span> Medium
+      <span style="color: green; margin-left: 15px;">●</span> Low
+    </div>
     <div id="map"></div>
   </div>
 
   <script>
-    // Function to switch from menu to map
-    function showMap() {
-      document.getElementById('menu').style.display = 'none';
-      document.getElementById('mapScreen').style.display = 'block';
-      initializeMap(); // Call the map and Firebase logic
-    }
-
     // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAwUD-JAejR1MxRKb9j1zBfeQqWBDRpn0o",
@@ -79,6 +85,73 @@
     const db = firebase.database();
 
     let map, markers = {};
+    let mapInitialized = false;
+
+    function showMap() {
+      document.getElementById('menu').style.display = 'none';
+      document.getElementById('mapScreen').style.display = 'block';
+      if (!mapInitialized) {
+        initializeMap();
+        mapInitialized = true;
+      }
+    }
+
+    // Calculate fill rate from history (cm/hour)
+    function calculateFillRate(history) {
+      if (!history || Object.keys(history).length < 2) return 0;
+
+      const entries = Object.entries(history)
+        .map(([time, fill]) => ({ time: Number(time), fill: Number(fill) }))
+        .sort((a, b) => a.time - b.time);
+
+      const first = entries[0];
+      const last = entries[entries.length - 1];
+      const timeDiffHours = (last.time - first.time) / (1000 * 60 * 60);
+      if (timeDiffHours <= 0) return 0;
+
+      const fillDiff = first.fill - last.fill; // Assume fill decreases over time
+      return fillDiff / timeDiffHours;
+    }
+
+    // AI-like priority logic based on type, level, and fill rate
+    function getBinPriority(type, distance, rate) {
+      const t = (type || "unknown").toLowerCase();
+      let basePriority = "Low";
+
+      if (distance <= 20) {
+        basePriority = (t === "meat") ? "Critical" :
+                       (t === "plastic") ? "High" :
+                       (t === "glass") ? "Medium" : "High";
+      } else if (distance <= 35) {
+        basePriority = (t === "meat") ? "High" :
+                       (t === "plastic") ? "Medium" :
+                       (t === "glass") ? "Low" : "Medium";
+      } else {
+        basePriority = (t === "meat") ? "Medium" : "Low";
+      }
+
+      // Adjust with fill rate
+      if (rate >= 1.5) {
+        if (basePriority === "Low") basePriority = "Medium";
+        else if (basePriority === "Medium") basePriority = "High";
+        else if (basePriority === "High") basePriority = "Critical";
+      } else if (rate <= 0.2) {
+        if (basePriority === "Medium") basePriority = "Low";
+        else if (basePriority === "High") basePriority = "Medium";
+      }
+
+      return basePriority;
+    }
+
+    function getPriorityColor(priority) {
+      switch (priority) {
+        case "Critical": return "darkred";
+        case "High": return "orange";
+        case "Medium": return "gold";
+        case "Low": return "green";
+        default: return "gray";
+      }
+    }
 
     function initializeMap() {
       map = L.map('map').setView([4.2105, 101.9758], 10);
@@ -89,24 +162,64 @@
 
       db.ref('bins').on('value', snapshot => {
         const bins = snapshot.val();
+        if (!bins) return;
+
+        // Remove old markers
         Object.values(markers).forEach(marker => map.removeLayer(marker));
         markers = {};
 
         for (const binID in bins) {
           const bin = bins[binID];
-          const color = (bin.distance_cm <= 20) ? 'red' : 'green';
+          if (!bin.latitude || !bin.longitude || bin.distance_cm == null) continue;
+
+          const rate = calculateFillRate(bin.history);
+          const priority = getBinPriority(bin.type, bin.distance_cm, rate);
+          const color = getPriorityColor(priority);
 
           const marker = L.circleMarker([bin.latitude, bin.longitude], {
             radius: 12,
             color: color,
             fillColor: color,
-            fillOpacity: 0.6
+            fillOpacity: 0.7
           }).addTo(map);
 
-          marker.bindPopup(`<b>${binID}</b><br>Fill Level: ${bin.distance_cm} cm`);
+          const popupContent = `
+            <b>${binID}</b><br>
+            Fill Level: ${bin.distance_cm} cm<br>
+            Type: ${bin.type || 'N/A'}<br>
+            Fill Rate: ${rate.toFixed(2)} cm/hr<br>
+            Priority: <strong>${priority}</strong><br><br>
+            <input type="text" id="input-${binID}" placeholder="Enter type" />
+            <button onclick="saveBinType('${binID}')">Save</button>
+          `;
+
+          marker.bindPopup(popupContent);
           markers[binID] = marker;
         }
+      }, error => {
+        console.error("Firebase error:", error);
       });
+    }
+
+    function saveBinType(binID) {
+      const input = document.getElementById(`input-${binID}`);
+      const newType = input.value.trim();
+      if (!newType) {
+        alert("Please enter a bin type.");
+        return;
+      }
+
+      db.ref(`bins/${binID}`).update({ type: newType })
+        .then(() => {
+          alert("Bin type updated!");
+          if (markers[binID]) {
+            markers[binID].closePopup();
+          }
+        })
+        .catch(error => {
+          console.error("Update error:", error);
+          alert("Error updating bin type.");
+        });
     }
   </script>
 </body>
