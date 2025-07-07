@@ -15,19 +15,69 @@
 
   <style>
     body {
-      font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
+      font-family: 'Arial', sans-serif;
+      background-color: #ffffff;
     }
 
+    /* Redesigned Menu Page */
     #menu {
+      background: linear-gradient(to bottom right, #fdfdfd, #d8f0e1);
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
+      text-align: center;
+      position: relative;
     }
 
+    .menu-container {
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      max-width: 500px;
+      width: 100%;
+    }
+
+    .title {
+      font-size: 48px;
+      font-weight: 900;
+      margin: 0;
+    }
+
+    .tagline {
+      font-size: 18px;
+      margin: 10px 0 20px;
+    }
+
+    .menu-buttons button {
+      display: block;
+      width: 100%;
+      margin: 10px auto;
+      padding: 10px 0;
+      font-size: 16px;
+      border-radius: 20px;
+      border: 2px solid black;
+      background: white;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .menu-buttons button:hover {
+      background: #f0f0f0;
+    }
+
+    .project-banner {
+      margin-top: 30px;
+      background: #ffe06e;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: bold;
+    }
+
+    /* Other Screens */
     #mapScreen,
     #statsScreen {
       display: none;
@@ -38,16 +88,16 @@
       width: 100%;
     }
 
+    #legend {
+      padding: 10px;
+      background: #fff;
+    }
+
     button {
       padding: 10px 20px;
       font-size: 16px;
       margin: 10px;
       cursor: pointer;
-    }
-
-    #legend {
-      padding: 10px;
-      background: #fff;
     }
   </style>
 </head>
@@ -55,9 +105,15 @@
 
   <!-- Menu Screen -->
   <div id="menu">
-    <h1>Welcome to Garbage Go</h1>
-    <button onclick="showMap()">Map</button>
-    <button onclick="showStats()">Statistics</button>
+    <div class="menu-container">
+      <h1 class="title">GARBAGE–GO!</h1>
+      <p class="tagline">Bin it. Track it. Collect it</p>
+      <div class="menu-buttons">
+        <button onclick="showMap()">map</button>
+        <button onclick="showStats()">statistics</button>
+      </div>
+      <div class="project-banner">Project KAHboom!</div>
+    </div>
   </div>
 
   <!-- Map Screen -->
@@ -123,16 +179,13 @@
 
     function calculateFillRate(history) {
       if (!history || Object.keys(history).length < 2) return 0;
-
       const entries = Object.entries(history)
         .map(([time, fill]) => ({ time: Number(time), fill: Number(fill) }))
         .sort((a, b) => a.time - b.time);
-
       const first = entries[0];
       const last = entries[entries.length - 1];
       const timeDiffHours = (last.time - first.time) / (1000 * 60 * 60);
       if (timeDiffHours <= 0) return 0;
-
       const fillDiff = first.fill - last.fill;
       return fillDiff / timeDiffHours;
     }
@@ -177,7 +230,6 @@
 
     function initializeMap() {
       map = L.map('map').setView([4.2105, 101.9758], 10);
-
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
       }).addTo(map);
@@ -185,14 +237,12 @@
       db.ref('bins').on('value', snapshot => {
         const bins = snapshot.val();
         if (!bins) return;
-
         Object.values(markers).forEach(marker => map.removeLayer(marker));
         markers = {};
 
         for (const binID in bins) {
           const bin = bins[binID];
           if (!bin.latitude || !bin.longitude || bin.distance_cm == null) continue;
-
           const rate = calculateFillRate(bin.history);
           const priority = getBinPriority(bin.type, bin.distance_cm, rate);
           const color = getPriorityColor(priority);
