@@ -28,7 +28,8 @@
       height: 100vh;
     }
 
-    #mapScreen {
+    #mapScreen,
+    #statsScreen {
       display: none;
     }
 
@@ -40,6 +41,7 @@
     button {
       padding: 10px 20px;
       font-size: 16px;
+      margin: 10px;
       cursor: pointer;
     }
 
@@ -55,6 +57,7 @@
   <div id="menu">
     <h1>Welcome to Garbage Go</h1>
     <button onclick="showMap()">Map</button>
+    <button onclick="showStats()">Statistics</button>
   </div>
 
   <!-- Map Screen -->
@@ -67,6 +70,14 @@
       <span style="color: green; margin-left: 15px;">●</span> Low
     </div>
     <div id="map"></div>
+    <button onclick="backToMenu()">Back to Menu</button>
+  </div>
+
+  <!-- Statistics Screen -->
+  <div id="statsScreen" style="padding: 20px;">
+    <h2>Bin Statistics</h2>
+    <div id="statsContent">Loading...</div>
+    <button onclick="backToMenu()">Back to Menu</button>
   </div>
 
   <script>
@@ -76,7 +87,7 @@
       authDomain: "trashcan-fill.firebaseapp.com",
       databaseURL: "https://trashcan-fill-default-rtdb.firebaseio.com/",
       projectId: "trashcan-fill",
-      storageBucket: "trashcan-fill.firebasestorage.app",
+      storageBucket: "trashcan-fill.appspot.com",
       messagingSenderId: "594167428",
       appId: "1:594167457428:web:2f95b9ef62e4114d073681"
     };
@@ -90,13 +101,26 @@
     function showMap() {
       document.getElementById('menu').style.display = 'none';
       document.getElementById('mapScreen').style.display = 'block';
+      document.getElementById('statsScreen').style.display = 'none';
       if (!mapInitialized) {
         initializeMap();
         mapInitialized = true;
       }
     }
 
-    // Calculate fill rate from history (cm/hour)
+    function showStats() {
+      document.getElementById('menu').style.display = 'none';
+      document.getElementById('mapScreen').style.display = 'none';
+      document.getElementById('statsScreen').style.display = 'block';
+      generateStats();
+    }
+
+    function backToMenu() {
+      document.getElementById('menu').style.display = 'flex';
+      document.getElementById('mapScreen').style.display = 'none';
+      document.getElementById('statsScreen').style.display = 'none';
+    }
+
     function calculateFillRate(history) {
       if (!history || Object.keys(history).length < 2) return 0;
 
@@ -109,11 +133,10 @@
       const timeDiffHours = (last.time - first.time) / (1000 * 60 * 60);
       if (timeDiffHours <= 0) return 0;
 
-      const fillDiff = first.fill - last.fill; // Assume fill decreases over time
+      const fillDiff = first.fill - last.fill;
       return fillDiff / timeDiffHours;
     }
 
-    // AI-like priority logic based on type, level, and fill rate
     function getBinPriority(type, distance, rate) {
       const t = (type || "unknown").toLowerCase();
       let basePriority = "Low";
@@ -130,7 +153,6 @@
         basePriority = (t === "meat") ? "Medium" : "Low";
       }
 
-      // Adjust with fill rate
       if (rate >= 1.5) {
         if (basePriority === "Low") basePriority = "Medium";
         else if (basePriority === "Medium") basePriority = "High";
@@ -164,7 +186,6 @@
         const bins = snapshot.val();
         if (!bins) return;
 
-        // Remove old markers
         Object.values(markers).forEach(marker => map.removeLayer(marker));
         markers = {};
 
@@ -186,10 +207,10 @@
           const popupContent = `
             <b>${binID}</b><br>
             Fill Level: ${bin.distance_cm} cm<br>
-            Type: ${bin.type || 'N/A'}<br>
+            Hazards: ${bin.type || 'N/A'}<br>
             Fill Rate: ${rate.toFixed(2)} cm/hr<br>
             Priority: <strong>${priority}</strong><br><br>
-            <input type="text" id="input-${binID}" placeholder="Enter type" />
+            <input type="text" id="input-${binID}" placeholder="Enter hazard" />
             <button onclick="saveBinType('${binID}')">Save</button>
           `;
 
@@ -205,21 +226,58 @@
       const input = document.getElementById(`input-${binID}`);
       const newType = input.value.trim();
       if (!newType) {
-        alert("Please enter a bin type.");
+        alert("Please enter a hazard type.");
         return;
       }
 
       db.ref(`bins/${binID}`).update({ type: newType })
         .then(() => {
-          alert("Bin type updated!");
+          alert("Hazard updated!");
           if (markers[binID]) {
             markers[binID].closePopup();
           }
         })
         .catch(error => {
           console.error("Update error:", error);
-          alert("Error updating bin type.");
+          alert("Error updating hazard.");
         });
+    }
+
+    function generateStats() {
+      db.ref('bins').once('value').then(snapshot => {
+        const bins = snapshot.val();
+        if (!bins) {
+          document.getElementById('statsContent').innerHTML = "No data available.";
+          return;
+        }
+
+        const total = Object.keys(bins).length;
+        const priorities = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+        const hazards = {};
+
+        for (const binID in bins) {
+          const bin = bins[binID];
+          const type = (bin.type || 'Unknown').toLowerCase();
+          const rate = calculateFillRate(bin.history);
+          const priority = getBinPriority(type, bin.distance_cm, rate);
+
+          priorities[priority] = (priorities[priority] || 0) + 1;
+          hazards[type] = (hazards[type] || 0) + 1;
+        }
+
+        let html = `<p><strong>Total Bins:</strong> ${total}</p>`;
+        html += `<h3>Priority Levels:</h3><ul>`;
+        for (const level in priorities) {
+          html += `<li>${level}: ${priorities[level]}</li>`;
+        }
+        html += `</ul><h3>Hazards:</h3><ul>`;
+        for (const type in hazards) {
+          html += `<li>${type}: ${hazards[type]}</li>`;
+        }
+        html += `</ul>`;
+
+        document.getElementById('statsContent').innerHTML = html;
+      });
     }
   </script>
 </body>
