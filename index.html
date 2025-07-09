@@ -21,6 +21,7 @@
       background-color: #ffffff;
     }
 
+    /* Redesigned Menu Page */
     #menu {
       background: linear-gradient(to bottom right, #fdfdfd, #d8f0e1);
       display: flex;
@@ -76,6 +77,7 @@
       font-weight: bold;
     }
 
+    /* Other Screens */
     #mapScreen,
     #statsScreen {
       display: none;
@@ -122,7 +124,6 @@
       <span style="color: orange; margin-left: 15px;">●</span> High
       <span style="color: gold; margin-left: 15px;">●</span> Medium
       <span style="color: green; margin-left: 15px;">●</span> Low
-      <span style="color: gray; margin-left: 15px;">●</span> Inactive
     </div>
     <div id="map"></div>
     <button onclick="backToMenu()">Back to Menu</button>
@@ -136,6 +137,7 @@
   </div>
 
   <script>
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAwUD-JAejR1MxRKb9j1zBfeQqWBDRpn0o",
       authDomain: "trashcan-fill.firebaseapp.com",
@@ -241,18 +243,9 @@
         for (const binID in bins) {
           const bin = bins[binID];
           if (!bin.latitude || !bin.longitude || bin.distance_cm == null) continue;
-
-          const lastUpdate = bin.lastUpdate || 0;
-          const now = Date.now();
-          const isInactive = (now - lastUpdate) > 5 * 60 * 1000; // 5 minutes
-
           const rate = calculateFillRate(bin.history);
           const priority = getBinPriority(bin.type, bin.distance_cm, rate);
-          let color = getPriorityColor(priority);
-
-          if (isInactive) {
-            color = "gray";
-          }
+          const color = getPriorityColor(priority);
 
           const marker = L.circleMarker([bin.latitude, bin.longitude], {
             radius: 12,
@@ -266,8 +259,7 @@
             Fill Level: ${bin.distance_cm} cm<br>
             Hazards: ${bin.type || 'N/A'}<br>
             Fill Rate: ${rate.toFixed(2)} cm/hr<br>
-            Priority: <strong>${priority}</strong><br>
-            Last Update: ${lastUpdate ? new Date(lastUpdate).toLocaleString() : 'Unknown'}<br><br>
+            Priority: <strong>${priority}</strong><br><br>
             <input type="text" id="input-${binID}" placeholder="Enter hazard" />
             <button onclick="saveBinType('${binID}')">Save</button>
           `;
@@ -275,6 +267,8 @@
           marker.bindPopup(popupContent);
           markers[binID] = marker;
         }
+      }, error => {
+        console.error("Firebase error:", error);
       });
     }
 
@@ -335,10 +329,6 @@
         document.getElementById('statsContent').innerHTML = html;
       });
     }
-  </script>
-</body>
-</html>
-
   </script>
 </body>
 </html>
